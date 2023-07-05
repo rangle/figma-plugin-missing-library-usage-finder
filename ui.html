@@ -1,17 +1,144 @@
-<h2>Rectangle Creator</h2>
-<p>Count: <input id="count" value="5"></p>
-<button id="create">Create</button>
-<button id="cancel">Cancel</button>
+<style>
+  body {
+    background-color: var(--figma-color-bg);
+    color: var(--figma-color-text);
+    font-family: Inter, sans-serif;
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: calc(0.005px + var(--text-tracking-pos, 0) * 11px);
+  }
+
+  button {
+    text-align: center;
+    flex-shrink: 0;
+    height: 32px;
+    line-height: 30px;
+    padding: 0 11px;
+    background-color: transparent;
+    box-sizing: border-box;
+    color: var(--figma-color-text);
+    border: 1px solid var(--figma-color-text);
+    box-sizing: border-box;
+    border-radius: 6px;
+  }
+  textarea {
+    width: 100%;
+    padding: 0.5em;
+    margin: 0 0 0.5em;
+  }
+  .button-holder {
+    padding: 1em 0;
+    text-align: right;
+  }
+  button + button {
+    margin-left: 15px;
+  }
+
+  .focus-instance-button {
+    font-size: 1.5em;
+    line-height: 0.5em;
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+  }
+  .result {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5em 1em;
+  }
+</style>
+<h2>Missing Library Usage Finder</h2>
+<p>Search for components or styles using missing library</p>
+<div>
+  <label
+    >Add new-line separated component or style name
+    <br />
+    <textarea id="components-or-styles" rows="5" required>
+  Elements-Header
+  utilities/opacity/lightest
+  utilities/primary/400
+  utilities/primary/500
+      </textarea
+    >
+  </label>
+</div>
+<div class="button-holder">
+  <button id="cancel" type="button">Cancel</button>
+  <button id="search" type="submit">Search</button>
+</div>
+<div id="results"></div>
 <script>
+  document.getElementById("search").onclick = () => {
+    const loading = document.createElement("i");
+    loading.innerText = "loading...";
+    document.getElementById("results").appendChild(loading);
+    parent.postMessage(
+      {
+        pluginMessage: {
+          type: "find-missing-library-usage",
+          search: document
+            .getElementById("components-or-styles")
+            .value.split("\n")
+            .map((v) => v.trim())
+            .filter((v) => v.length > 0),
+        },
+      },
+      "*"
+    );
+  };
 
-document.getElementById('create').onclick = () => {
-  const textbox = document.getElementById('count');
-  const count = parseInt(textbox.value, 10);
-  parent.postMessage({ pluginMessage: { type: 'create-rectangles', count } }, '*')
-}
+  document.getElementById("cancel").onclick = () => {
+    parent.postMessage({ pluginMessage: { type: "cancel" } }, "*");
+  };
 
-document.getElementById('cancel').onclick = () => {
-  parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*')
-}
+  const renderResults = (nodes) => {
+    const outlet = document.getElementById("results");
+    const wrapper = document.createElement("div");
+    outlet.innerHTML = "";
 
+    nodes.forEach(([page, instances]) => {
+      const Inner = document.createElement("div");
+      Inner.innerHTML = `
+        <strong>Page: ${page.pageName}</strong>
+        <ul>
+        ${instances
+          .map(
+            (i) =>
+              `<li class="result">
+              <span>${i.name}${
+                i.styleName ? ` (<code>${i.styleName}</code>)` : ""
+              }</span>
+              <button class="focus-instance-button" data-page-id="${
+                page.pageId
+              }" data-instance-id="${i.id}">⌖</button>
+            </li>`
+          )
+          .join("\n")}
+        </ul>`;
+      wrapper.appendChild(Inner);
+      wrapper.addEventListener("click", (e) => {
+        const pageId = e.target.getAttribute("data-page-id");
+        const instanceId = e.target.getAttribute("data-instance-id");
+        if (pageId && instanceId) {
+          console.log("click", pageId, instanceId);
+          parent.postMessage(
+            { pluginMessage: { type: "focus-instance", pageId, instanceId } },
+            "*"
+          );
+        }
+      });
+    });
+
+    outlet.appendChild(wrapper);
+  };
+
+  onmessage = ({ data: { pluginMessage } }) => {
+    if (pluginMessage.type === "result") {
+      console.log("UI >>>  got result", pluginMessage.nodes);
+      renderResults(pluginMessage.nodes);
+    }
+  };
 </script>

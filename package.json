@@ -1,7 +1,7 @@
 {
   "name": "MissingLibraryUsageFinder",
   "version": "1.0.0",
-  "description": "Your Figma Plugin",
+  "description": "Figma Plugin to find instances or styles using missing library",
   "main": "code.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
