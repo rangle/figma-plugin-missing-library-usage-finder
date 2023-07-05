@@ -17,21 +17,49 @@
     background-color: transparent;
     box-sizing: border-box;
     color: var(--figma-color-text);
-    border: 1px solid var(--figma-color-text);
+    border: 1px solid var(--figma-color-border);
     box-sizing: border-box;
     border-radius: 6px;
   }
+
+  button svg path {
+    fill: var(--figma-color-text);
+  }
+
+  button:hover {
+    color: var(--figma-color-text-hover);
+    background-color: var(--figma-color-bg-hover);
+  }
+
+  button:hover svg path {
+    fill: var(--figma-color-text-hover);
+  }
+
+  button:disabled,
+  button:disabled:hover {
+    color: var(--figma-color-text-disabled);
+    border: 1px solid var(--figma-color-border-disabled);
+    background-color: transparent;
+  }
+
+  button + button {
+    margin-left: 15px;
+  }
+
   textarea {
     width: 100%;
     padding: 0.5em;
     margin: 0 0 0.5em;
   }
+
+  ul {
+    list-style: none;
+    padding: 0;
+  }
+
   .button-holder {
     padding: 1em 0;
     text-align: right;
-  }
-  button + button {
-    margin-left: 15px;
   }
 
   .focus-instance-button {
@@ -39,42 +67,70 @@
     line-height: 0.5em;
   }
 
-  ul {
-    list-style: none;
-    padding: 0;
-  }
   .result {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 0.5em 1em;
+    gap: 1em;
+  }
+
+  .result.detached {
+    color: var(--figma-color-text-disabled);
+  }
+  .result.detached button:disabled {
+    background-color: var(--figma-color-bg-success);
+  }
+
+  .actions {
+    white-space: nowrap;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5em;
+  }
+
+  .actions button + button {
+    margin: 0;
+  }
+
+  #results {
+    margin-top: 1em;
+  }
+
+  #loading {
+    display: none;
+    text-align: center;
+    margin-top: 20vh;
   }
 </style>
-<h2>Missing Library Usage Finder</h2>
-<p>Search for components or styles using missing library</p>
-<div>
+<!-- <h2>Missing Library Usage Finder</h2> -->
+<p>
+  Search for components or styles by name, e.g. those used by missing libraries.
+</p>
+<form>
   <label
-    >Add new-line separated component or style name
+    >Add new-line separated component or style name:
     <br />
     <textarea id="components-or-styles" rows="5" required>
-  Elements-Header
-  utilities/opacity/lightest
-  utilities/primary/400
-  utilities/primary/500
-      </textarea
+Elements-Header
+utilities/opacity/lightest
+utilities/primary/400
+utilities/primary/500</textarea
     >
   </label>
-</div>
+</form>
 <div class="button-holder">
   <button id="cancel" type="button">Cancel</button>
   <button id="search" type="submit">Search</button>
 </div>
+<div id="loading"><i>searching&hellip;</i></div>
 <div id="results"></div>
 <script>
+  const detatchIcon = `<svg class="svg" width="14" height="14" viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg"><path d="M4 0v3h1V0H4zm9.103.896c-1.162-1.161-3.045-1.161-4.207 0l-2.75 2.75.707.708 2.75-2.75c.771-.772 2.022-.772 2.793 0 .771.77.771 2.021 0 2.792l-2.75 2.75.707.708 2.75-2.75c1.162-1.162 1.162-3.046 0-4.208zM.896 13.103c-1.162-1.161-1.162-3.045 0-4.207l2.75-2.75.707.708-2.75 2.75c-.771.77-.771 2.021 0 2.792.771.772 2.022.772 2.793 0l2.75-2.75.707.707-2.75 2.75c-1.162 1.162-3.045 1.162-4.207 0zM14 10h-3V9h3v1zM10 11v3H9v-3h1zM3 4H0v1h3V4z" fill-rule="nonzero" fill-opacity=".9" fill="#000" stroke="none"></path></svg>`;
   document.getElementById("search").onclick = () => {
-    const loading = document.createElement("i");
-    loading.innerText = "loading...";
-    document.getElementById("results").appendChild(loading);
+    document.getElementById("loading").style.display = "block";
+    document.getElementById("search").setAttribute("disabled", "true");
+    document.getElementById("results").innerHTML = "";
     parent.postMessage(
       {
         pluginMessage: {
@@ -94,9 +150,14 @@
     parent.postMessage({ pluginMessage: { type: "cancel" } }, "*");
   };
 
+  let wrapper = undefined;
+
   const renderResults = (nodes) => {
+    if (wrapper) {
+      wrapper.remove();
+    }
     const outlet = document.getElementById("results");
-    const wrapper = document.createElement("div");
+    wrapper = document.createElement("div");
     outlet.innerHTML = "";
 
     nodes.forEach(([page, instances]) => {
@@ -107,29 +168,65 @@
         ${instances
           .map(
             (i) =>
-              `<li class="result">
-              <span>${i.name}${
-                i.styleName ? ` (<code>${i.styleName}</code>)` : ""
-              }</span>
-              <button class="focus-instance-button" data-page-id="${
+              `<li class="result" data-page-id="${
                 page.pageId
-              }" data-instance-id="${i.id}">⌖</button>
+              }" data-instance-id="${i.id}" ${
+                i.styleId
+                  ? `data-style-id="${i.styleId}" data-style-prop="${i.styleProp}" `
+                  : ""
+              }>
+              <span>${
+                i.styleName
+                  ? `<code>${i.styleName}</code> - ${
+                      i.name
+                    } (${i.styleProp.replace("StyleId", "")})`
+                  : i.name
+              }</span>
+              <span class="actions">
+              <button class="focus-instance-button" title="Focus Instance">⌖</button>
+              ${
+                i.styleName
+                  ? `<button class="detach-style-button" title="Detach Style">${detatchIcon}</button>`
+                  : `<button class="detach-instance-button" title="Detach Instance">${detatchIcon}</button>`
+              }</span>
             </li>`
           )
           .join("\n")}
         </ul>`;
       wrapper.appendChild(Inner);
-      wrapper.addEventListener("click", (e) => {
-        const pageId = e.target.getAttribute("data-page-id");
-        const instanceId = e.target.getAttribute("data-instance-id");
-        if (pageId && instanceId) {
-          console.log("click", pageId, instanceId);
-          parent.postMessage(
-            { pluginMessage: { type: "focus-instance", pageId, instanceId } },
-            "*"
-          );
-        }
-      });
+    });
+    // handle bubbled up event, so we don't need to deal with re-attaching/removing event listeners
+    wrapper.addEventListener("click", (evt) => {
+      const target = evt.target;
+      if (!target.closest("button") || target.hasAttribute("disabled")) {
+        // don't react to non-button or disabled button clicks
+        return;
+      }
+
+      const isFocus = target.classList.contains("focus-instance-button");
+      const result = target.closest(".result");
+      const pageId = result.getAttribute("data-page-id");
+      const instanceId = result.getAttribute("data-instance-id");
+      const styleId = result.getAttribute("data-style-id");
+      const styleProp = result.getAttribute("data-style-prop");
+      if (!isFocus) {
+        // fix double firing
+        target.setAttribute("disabled", true);
+      }
+      if (pageId && instanceId) {
+        parent.postMessage(
+          {
+            pluginMessage: {
+              type: isFocus ? "focus-instance" : "detach-instance",
+              pageId,
+              instanceId,
+              styleProp,
+              styleId,
+            },
+          },
+          "*"
+        );
+      }
     });
 
     outlet.appendChild(wrapper);
@@ -137,8 +234,25 @@
 
   onmessage = ({ data: { pluginMessage } }) => {
     if (pluginMessage.type === "result") {
-      console.log("UI >>>  got result", pluginMessage.nodes);
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("search").removeAttribute("disabled");
       renderResults(pluginMessage.nodes);
+    }
+    if (pluginMessage.type === "error") {
+      alert(pluginMessage.error);
+    }
+    if (pluginMessage.type === "confirm-detach") {
+      const { instanceId, styleProp } = pluginMessage;
+      const resultSelector = `[data-instance-id="${instanceId}"]${
+        styleProp ? `[data-style-prop="${styleProp}"]` : ""
+      }`;
+      const result = document.querySelector(resultSelector);
+      result.classList.add("detached");
+      result.querySelector(".focus-instance-button").remove();
+      const detachButton = result.querySelector(
+        ".detach-style-button, .detach-instance-button"
+      );
+      detachButton.setAttribute("disabled", "true");
     }
   };
 </script>
