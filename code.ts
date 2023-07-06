@@ -1,14 +1,24 @@
-// This plugin will open a window to prompt the user to enter a number, and
-// it will then create that many rectangles on the screen.
+type PageFinds = { page: PageNode; instances: InstanceNode[] };
+type StyledNode = FrameNode | ComponentNode | InstanceNode;
+type PageStyleFinds = {
+  page: PageNode;
+  instances: Array<[BaseStyle, string, StyledNode | TextNode]>;
+};
+type StyleProps = (typeof stylesProps)[number];
 
-// This file holds the main code for plugins. Code in this file has access to
-// the *figma document* via the figma global object.
-// You can access browser APIs in the <script> tag inside "ui.html" which has a
-// full browser environment (See https://www.figma.com/plugin-docs/how-plugins-run).
+/** All props with styles for non-text nodes */
+const stylesProps = [
+  "backgroundStyleId",
+  "fillStyleId",
+  "strokeStyleId",
+  "gridStyleId",
+  "effectStyleId",
+] as const;
 
 // This shows the HTML page in "ui.html".
 figma.showUI(__html__, { height: 500, width: 350, themeColors: true });
 
+/** Helper to get the Page a node is contained in */
 const getPage = (node: BaseNode): PageNode | undefined => {
   if (node.parent?.type === "PAGE") {
     return node.parent;
@@ -16,7 +26,7 @@ const getPage = (node: BaseNode): PageNode | undefined => {
   return node.parent ? getPage(node.parent) : undefined;
 };
 
-type PageFinds = { page: PageNode; instances: InstanceNode[] };
+/** Helper to find usage of Components */
 const findMissingLibraryComponentUsages = (componentNames: string[]) => {
   return (
     figma.root.findAll(
@@ -45,22 +55,7 @@ const findMissingLibraryComponentUsages = (componentNames: string[]) => {
     }, {});
 };
 
-type StyledNode = FrameNode | ComponentNode | InstanceNode;
-type PageStyleFinds = {
-  page: PageNode;
-  instances: Array<[BaseStyle, string, StyledNode | TextNode]>;
-};
-
-/** All styles for non-text nodes */
-const stylesProps = [
-  "backgroundStyleId",
-  "fillStyleId",
-  "strokeStyleId",
-  "gridStyleId",
-  "effectStyleId",
-] as const;
-type StyleProps = (typeof stylesProps)[number];
-
+/** Helper to find usage of Styles */
 const findMissingLibraryStyleUsages = (styleNames: string[]) => {
   /** returns the style only if it's missing */
   const getMissingStyle = (node: StyledNode, prop: StyleProps) => {
@@ -131,125 +126,139 @@ const findMissingLibraryStyleUsages = (styleNames: string[]) => {
   }, {});
 };
 
-// Calls to "parent.postMessage" from within the HTML page will trigger this
-// callback. The callback will be passed the "pluginMessage" property of the
-// posted message.
-figma.ui.onmessage = (msg, props) => {
-  // One way of distinguishing between different types of messages sent from
-  // your HTML page is to use an object with a "type" property like this.
-  if (msg.type === "find-missing-library-usage") {
-    console.log("searching...");
-    const nodes = findMissingLibraryComponentUsages(msg.search);
-    const styleUsages = findMissingLibraryStyleUsages(msg.search);
+/** Main handler for `find-missing-library-usage` */
+const handleFindMissingLibraryUsage = (search: string[]) => {
+  console.log("searching...");
+  const nodes = findMissingLibraryComponentUsages(search);
+  const styleUsages = findMissingLibraryStyleUsages(search);
 
-    console.log(">>> nodes", nodes);
-    console.log(">>> styleUsages", styleUsages);
+  console.log(">>> nodes", nodes);
+  console.log(">>> styleUsages", styleUsages);
 
-    // Auto select/zoom
-    // // console.log(styleUsages);
-    // let containsCurrentPage = false;
-    // Object.values(nodes).forEach(({ page, instances }) => {
-    //   // select
-    //   page.selection = instances;
-    //   if (figma.currentPage === page) {
-    //     figma.viewport.scrollAndZoomIntoView(instances);
-    //     containsCurrentPage = true;
-    //   }
-    // });
+  // Auto select/zoom
+  // // console.log(styleUsages);
+  // let containsCurrentPage = false;
+  // Object.values(nodes).forEach(({ page, instances }) => {
+  //   // select
+  //   page.selection = instances;
+  //   if (figma.currentPage === page) {
+  //     figma.viewport.scrollAndZoomIntoView(instances);
+  //     containsCurrentPage = true;
+  //   }
+  // });
 
-    // if (!containsCurrentPage && Object.values(nodes).length > 0) {
-    //   const { page, instances } = Object.values(nodes)[0];
-    //   figma.currentPage = page;
-    //   figma.viewport.scrollAndZoomIntoView(instances);
-    // }
+  // if (!containsCurrentPage && Object.values(nodes).length > 0) {
+  //   const { page, instances } = Object.values(nodes)[0];
+  //   figma.currentPage = page;
+  //   figma.viewport.scrollAndZoomIntoView(instances);
+  // }
 
-    type Result = { id: string; name: string; styleName?: string };
+  type Result = { id: string; name: string; styleName?: string };
 
-    let result: Array<[{ pageId: string; pageName: string }, Array<Result>]> =
-      Object.entries(nodes).map(([pageName, { page, instances }]) => [
-        {
-          pageId: page.id,
-          pageName: page.name,
-        },
-        instances.map((i) => ({
-          id: i.id,
-          name: i.name,
-        })),
-      ]);
-
-    Object.entries(styleUsages).forEach(([pageName, { page, instances }]) => {
-      console.log(">>>", page, instances);
-      const simpleInstances = instances.map(([style, styleProp, i]) => ({
+  let result: Array<[{ pageId: string; pageName: string }, Array<Result>]> =
+    Object.entries(nodes).map(([pageName, { page, instances }]) => [
+      {
+        pageId: page.id,
+        pageName: page.name,
+      },
+      instances.map((i) => ({
         id: i.id,
         name: i.name,
-        styleProp,
-        styleId: style.id,
-        styleName: style.name,
-      }));
+      })),
+    ]);
 
-      const currentPageIndex = result.findIndex((p) => p[0].pageId === page.id);
+  Object.entries(styleUsages).forEach(([pageName, { page, instances }]) => {
+    console.log(">>>", page, instances);
+    const simpleInstances = instances.map(([style, styleProp, i]) => ({
+      id: i.id,
+      name: i.name,
+      styleProp,
+      styleId: style.id,
+      styleName: style.name,
+    }));
 
-      if (currentPageIndex >= 0) {
-        result[currentPageIndex][1].push(...simpleInstances);
-        return;
-      }
+    const currentPageIndex = result.findIndex((p) => p[0].pageId === page.id);
 
-      result.push([
-        {
-          pageId: page.id,
-          pageName: page.name,
-        },
-        simpleInstances,
-      ]);
-    });
-
-    console.log(">>>> result", result);
-
-    figma.ui.postMessage({ type: "result", nodes: result });
-  }
-
-  if (msg.type === "focus-instance") {
-    const { pageId, instanceId } = msg;
-    const page = figma.getNodeById(pageId) as PageNode;
-    const node = figma.getNodeById(instanceId) as SceneNode;
-    if (!page || !node) {
-      const error = `Could not find ${
-        !page ? "Page" : "Node"
-      } with ID: ${instanceId}`;
-      console.error(error);
-      figma.ui.postMessage({ type: "error", error });
+    if (currentPageIndex >= 0) {
+      result[currentPageIndex][1].push(...simpleInstances);
       return;
     }
 
-    page.selection = [node];
-    figma.currentPage = page;
-    figma.viewport.scrollAndZoomIntoView([node]);
+    result.push([
+      {
+        pageId: page.id,
+        pageName: page.name,
+      },
+      simpleInstances,
+    ]);
+  });
+  figma.ui.postMessage({ type: "result", nodes: result });
+};
+
+/** Main handler for `focus-instance` */
+const handleFocusInstance = (pageId: string, instanceId: string) => {
+  const page = figma.getNodeById(pageId) as PageNode;
+  const node = figma.getNodeById(instanceId) as SceneNode;
+  if (!page || !node) {
+    const error = `Could not find ${
+      !page ? "Page" : "Node"
+    } with ID: ${instanceId}`;
+    console.error(error);
+    figma.ui.postMessage({ type: "error", error });
+    return;
   }
 
-  if (msg.type === "detach-instance") {
-    const { pageId, instanceId, styleId, styleProp } = msg;
-    // const page = figma.getNodeById(pageId) as PageNode;
-    const node = figma.getNodeById(instanceId) as StyledNode;
-    console.log(">> detach-instance", msg, node);
-    if (styleId) {
-      (node as FrameNode | ComponentNode)[styleProp as StyleProps] = "";
-      figma.ui.postMessage({
-        type: "confirm-detach",
-        instanceId,
-        styleProp,
-      });
-    } else {
-      (node as InstanceNode).detachInstance();
-      figma.ui.postMessage({
-        type: "confirm-detach",
-        instanceId,
-      });
+  page.selection = [node];
+  figma.currentPage = page;
+  figma.viewport.scrollAndZoomIntoView([node]);
+};
+
+/** Main handler for `detach-instance` */
+const handleDetachInstance = (
+  instanceId: string,
+  styleId?: string,
+  styleProp?: string
+) => {
+  const node = figma.getNodeById(instanceId) as StyledNode;
+  console.log(">> detach-instance", instanceId, styleId, styleProp, node);
+  if (!styleId) {
+    // Detach component instance
+    (node as InstanceNode).detachInstance();
+    figma.ui.postMessage({
+      type: "confirm-detach",
+      instanceId,
+    });
+    return;
+  }
+  // Detach Style
+  (node as FrameNode | ComponentNode)[styleProp as StyleProps] = "";
+  figma.ui.postMessage({
+    type: "confirm-detach",
+    instanceId,
+    styleProp,
+  });
+};
+
+figma.ui.onmessage = (msg, props) => {
+  switch (msg.type) {
+    case "find-missing-library-usage": {
+      handleFindMissingLibraryUsage(msg.search);
+      return;
     }
-  }
-
-  if (msg.type === "cancel") {
-    // Make sure to close the plugin when you're done. Otherwise the plugin will
-    // keep running, which shows the cancel button at the bottom of the screen.
-    figma.closePlugin();
+    case "focus-instance": {
+      handleFocusInstance(msg.pageId, msg.instanceId);
+      return;
+    }
+    case "detach-instance": {
+      handleDetachInstance(msg.instanceId, msg.styleId, msg.styleProp);
+      return;
+    }
+    case "cancel": {
+      figma.closePlugin();
+      return;
+    }
+    default: {
+      console.error(`${msg.type} is not implemented`, msg);
+    }
   }
 };
