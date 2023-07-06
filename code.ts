@@ -1,8 +1,8 @@
 type PageFinds = { page: PageNode; instances: InstanceNode[] };
-type StyledNode = FrameNode | ComponentNode | InstanceNode;
+
 type PageStyleFinds = {
   page: PageNode;
-  instances: Array<[BaseStyle, string, StyledNode | TextNode]>;
+  instances: Array<[BaseStyle, string, BaseNode]>;
 };
 type StyleProps = (typeof stylesProps)[number];
 
@@ -13,6 +13,7 @@ const stylesProps = [
   "strokeStyleId",
   "gridStyleId",
   "effectStyleId",
+  // textStyleId handed separately
 ] as const;
 
 // This shows the HTML page in "ui.html".
@@ -58,24 +59,30 @@ const findMissingLibraryComponentUsages = (componentNames: string[]) => {
 /** Helper to find usage of Styles */
 const findMissingLibraryStyleUsages = (styleNames: string[]) => {
   /** returns the style only if it's missing */
-  const getMissingStyle = (node: StyledNode, prop: StyleProps) => {
-    if (prop in node) {
-      const style = figma.getStyleById(node[prop].toString());
-      return style && styleNames.includes(style.name) ? style : undefined;
+  const getMissingStyle = (node: BaseNode, prop: StyleProps) => {
+    if (!(prop in node)) {
+      return undefined;
     }
-    return undefined;
+    const propVal = (
+      node as { [index in StyleProps]: { toString: () => string } }
+    )[prop];
+    const style = figma.getStyleById(propVal.toString());
+    return style && styleNames.includes(style.name) ? style : undefined;
   };
 
-  let styledNodes = figma.root.findAll(
-    (n) =>
-      stylesProps.every((v) => v in n) &&
-      stylesProps.some((v) => (n as StyledNode)[v] !== "")
-  ) as Array<StyledNode>;
+  let styledNodes = figma.root.findAll((n) =>
+    stylesProps.some(
+      (v) => v in n && (n as Record<typeof v, unknown>)[v] !== ""
+    )
+  ) as Array<BaseNode>;
 
   const missingFrameAndInstanceStyles = styledNodes.flatMap((node) => {
     return stylesProps.flatMap<
-      [PageNode | undefined, BaseStyle, string, StyledNode]
+      [PageNode | undefined, BaseStyle, string, BaseNode]
     >((styleProp) => {
+      if (!(styleProp in node)) {
+        return [];
+      }
       const missingStyle = getMissingStyle(node, styleProp);
       if (missingStyle) {
         return [[getPage(node), missingStyle, styleProp, node]];
@@ -219,7 +226,7 @@ const handleDetachInstance = (
   styleId?: string,
   styleProp?: string
 ) => {
-  const node = figma.getNodeById(instanceId) as StyledNode;
+  const node = figma.getNodeById(instanceId);
   console.log(">> detach-instance", instanceId, styleId, styleProp, node);
   if (!styleId) {
     // Detach component instance
