@@ -7,8 +7,12 @@
     "build": "tsc -p tsconfig.json",
     "watch": "npm run build -- --watch"
   },
-  "author": "",
-  "license": "",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rangle/figma-plugin-missing-library-usage-finder"
+  },
+  "author": "michael.mrowetz@rangle.io",
+  "license": "MIT",
   "devDependencies": {
     "@figma/plugin-typings": "*",
     "typescript": "*"
