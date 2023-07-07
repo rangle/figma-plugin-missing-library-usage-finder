@@ -28,8 +28,8 @@ const getPage = (node: BaseNode): PageNode | undefined => {
 };
 
 /** Helper to find usage of Components */
-const findMissingLibraryComponentUsages = (componentNames: string[]) => {
-  return (
+const findMissingLibraryComponentUsages = (componentNames: string[]) =>
+  (
     figma.root.findAll(
       (n) =>
         n.type === "INSTANCE" &&
@@ -37,42 +37,43 @@ const findMissingLibraryComponentUsages = (componentNames: string[]) => {
         componentNames.includes(n.mainComponent?.name)
     ) as InstanceNode[]
   )
-    .map((f): [PageNode | undefined, InstanceNode] => [getPage(f), f])
-    .reduce<Record<string, PageFinds>>((acc, [page, find]) => {
+    .map((node): [PageNode | undefined, InstanceNode] => [getPage(node), node])
+    .reduce<Record<string, PageFinds>>((acc, [page, node]) => {
       if (!page) {
         return acc;
       }
       if (acc[page.name]) {
-        acc[page.name].instances.push(find);
+        acc[page.name].instances.push(node);
         return acc;
       }
       return {
         ...acc,
         [page.name]: {
           page,
-          instances: [find],
+          instances: [node],
         },
       };
     }, {});
-};
 
 /** Helper to find usage of Styles */
 const findMissingLibraryStyleUsages = (styleNames: string[]) => {
   /** returns the style only if it's missing */
-  const getMissingStyle = (node: BaseNode, prop: StyleProps) => {
-    if (!(prop in node)) {
+  const getMissingStyle = (node: BaseNode, styleProp: StyleProps) => {
+    if (!(styleProp in node)) {
       return undefined;
     }
     const propVal = (
       node as { [index in StyleProps]: { toString: () => string } }
-    )[prop];
+    )[styleProp];
     const style = figma.getStyleById(propVal.toString());
     return style && styleNames.includes(style.name) ? style : undefined;
   };
 
-  let styledNodes = figma.root.findAll((n) =>
+  let styledNodes = figma.root.findAll((node) =>
     stylesProps.some(
-      (v) => v in n && (n as Record<typeof v, unknown>)[v] !== ""
+      (styleProp) =>
+        styleProp in node &&
+        (node as Record<typeof styleProp, unknown>)[styleProp] !== ""
     )
   ) as Array<BaseNode>;
 
@@ -90,11 +91,6 @@ const findMissingLibraryStyleUsages = (styleNames: string[]) => {
       return [];
     });
   });
-
-  console.log(
-    ">>> missingFrameAndInstanceStyles",
-    missingFrameAndInstanceStyles
-  );
 
   let textNodes = figma.root.findAll(
     (node) => "textStyleId" in node && node.textStyleId !== ""
