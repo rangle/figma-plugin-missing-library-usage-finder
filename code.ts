@@ -5,6 +5,10 @@ type PageStyleFinds = {
   instances: Array<[BaseStyle, string, BaseNode]>;
 };
 type StyleProps = (typeof stylesProps)[number];
+type Result = [
+  { pageId: string; pageName: string },
+  Array<{ id: string; name: string; styleName?: string }>
+];
 
 /** All props with styles for non-text nodes */
 const stylesProps = [
@@ -27,16 +31,28 @@ const getPage = (node: BaseNode): PageNode | undefined => {
   return node.parent ? getPage(node.parent) : undefined;
 };
 
+/** Resolves Variants and children to the top ComponentNode in a Component  */
+const getParent = (node: BaseNode, stackSize = 1): BaseNode => {
+  if (node.parent === null) {
+    return node;
+  }
+  return getParent(node.parent, stackSize + 1);
+};
+
+/** Helper to get all components that are instances of names in `componentNames` */
+const getInstanceOfComponents = (componentNames: string[]): InstanceNode[] => {
+  return figma.root.findAll((node) => {
+    if (node.type !== "INSTANCE" || node.mainComponent?.name === undefined) {
+      return false;
+    }
+    const mainComponentNodeName = getParent(node.mainComponent).name;
+    return componentNames.includes(mainComponentNodeName);
+  }) as InstanceNode[];
+};
+
 /** Helper to find usage of Components */
 const findMissingLibraryComponentUsages = (componentNames: string[]) =>
-  (
-    figma.root.findAll(
-      (n) =>
-        n.type === "INSTANCE" &&
-        !!n.mainComponent?.name &&
-        componentNames.includes(n.mainComponent?.name)
-    ) as InstanceNode[]
-  )
+  getInstanceOfComponents(componentNames)
     .map((node): [PageNode | undefined, InstanceNode] => [getPage(node), node])
     .reduce<Record<string, PageFinds>>((acc, [page, node]) => {
       if (!page) {
@@ -135,31 +151,8 @@ const handleFindMissingLibraryUsage = (search: string[]) => {
   const nodes = findMissingLibraryComponentUsages(search);
   const styleUsages = findMissingLibraryStyleUsages(search);
 
-  console.log(">>> nodes", nodes);
-  console.log(">>> styleUsages", styleUsages);
-
-  // Auto select/zoom
-  // // console.log(styleUsages);
-  // let containsCurrentPage = false;
-  // Object.values(nodes).forEach(({ page, instances }) => {
-  //   // select
-  //   page.selection = instances;
-  //   if (figma.currentPage === page) {
-  //     figma.viewport.scrollAndZoomIntoView(instances);
-  //     containsCurrentPage = true;
-  //   }
-  // });
-
-  // if (!containsCurrentPage && Object.values(nodes).length > 0) {
-  //   const { page, instances } = Object.values(nodes)[0];
-  //   figma.currentPage = page;
-  //   figma.viewport.scrollAndZoomIntoView(instances);
-  // }
-
-  type Result = { id: string; name: string; styleName?: string };
-
-  let result: Array<[{ pageId: string; pageName: string }, Array<Result>]> =
-    Object.entries(nodes).map(([pageName, { page, instances }]) => [
+  let result: Result[] = Object.entries(nodes).map(
+    ([pageName, { page, instances }]) => [
       {
         pageId: page.id,
         pageName: page.name,
@@ -168,10 +161,10 @@ const handleFindMissingLibraryUsage = (search: string[]) => {
         id: i.id,
         name: i.name,
       })),
-    ]);
+    ]
+  );
 
   Object.entries(styleUsages).forEach(([pageName, { page, instances }]) => {
-    console.log(">>>", page, instances);
     const simpleInstances = instances.map(([style, styleProp, i]) => ({
       id: i.id,
       name: i.name,
@@ -254,10 +247,6 @@ figma.ui.onmessage = (msg, props) => {
     }
     case "detach-instance": {
       handleDetachInstance(msg.instanceId, msg.styleId, msg.styleProp);
-      return;
-    }
-    case "cancel": {
-      figma.closePlugin();
       return;
     }
     default: {

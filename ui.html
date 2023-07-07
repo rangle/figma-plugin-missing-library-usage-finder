@@ -57,6 +57,10 @@
     padding: 0;
   }
 
+  form {
+    margin: 0;
+  }
+
   .button-holder {
     padding: 1em 0;
     text-align: right;
@@ -93,6 +97,10 @@
     margin: 0;
   }
 
+  #search {
+    padding: 0 2em;
+  }
+
   #results {
     margin-top: 1em;
   }
@@ -112,16 +120,24 @@
     <br />
     <textarea id="components-or-styles" rows="5" required></textarea>
   </label>
+  <div class="button-holder">
+    <button id="search" type="submit">Search</button>
+  </div>
 </form>
-<div class="button-holder">
-  <button id="cancel" type="button">Cancel</button>
-  <button id="search" type="submit">Search</button>
-</div>
 <div id="loading"><i>searching&hellip;</i></div>
 <div id="results"></div>
 <script>
   const detatchIcon = `<svg class="svg" width="14" height="14" viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg"><path d="M4 0v3h1V0H4zm9.103.896c-1.162-1.161-3.045-1.161-4.207 0l-2.75 2.75.707.708 2.75-2.75c.771-.772 2.022-.772 2.793 0 .771.77.771 2.021 0 2.792l-2.75 2.75.707.708 2.75-2.75c1.162-1.162 1.162-3.046 0-4.208zM.896 13.103c-1.162-1.161-1.162-3.045 0-4.207l2.75-2.75.707.708-2.75 2.75c-.771.77-.771 2.021 0 2.792.771.772 2.022.772 2.793 0l2.75-2.75.707.707-2.75 2.75c-1.162 1.162-3.045 1.162-4.207 0zM14 10h-3V9h3v1zM10 11v3H9v-3h1zM3 4H0v1h3V4z" fill-rule="nonzero" fill-opacity=".9" fill="#000" stroke="none"></path></svg>`;
   document.getElementById("search").onclick = () => {
+    const search = document
+      .getElementById("components-or-styles")
+      .value.split("\n")
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0);
+    if (search.length === 0) {
+      document.getElementsByTagName("form").checkValidity();
+      return;
+    }
     document.getElementById("loading").style.display = "block";
     document.getElementById("search").setAttribute("disabled", "true");
     document.getElementById("results").innerHTML = "";
@@ -129,19 +145,11 @@
       {
         pluginMessage: {
           type: "find-missing-library-usage",
-          search: document
-            .getElementById("components-or-styles")
-            .value.split("\n")
-            .map((v) => v.trim())
-            .filter((v) => v.length > 0),
+          search,
         },
       },
       "*"
     );
-  };
-
-  document.getElementById("cancel").onclick = () => {
-    parent.postMessage({ pluginMessage: { type: "cancel" } }, "*");
   };
 
   let wrapper = undefined;
