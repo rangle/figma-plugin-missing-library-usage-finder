@@ -1,3 +1,6 @@
+<!-- Figma needs all code in a single file and does not support CSS imports etc.
+  For now it's ok to keep all in a file but we might need to add
+  a build step later -->
 <style>
   body {
     background-color: var(--figma-color-bg);
@@ -231,6 +234,12 @@
       }
     });
 
+    if (nodes.length === 0) {
+      const noResults = document.createElement("i");
+      noResults.innerText =
+        "No results found!\n\nPlease check the spelling or if there are pre-fixes hidden from the Figma UI";
+      wrapper.appendChild(noResults);
+    }
     outlet.appendChild(wrapper);
   };
 

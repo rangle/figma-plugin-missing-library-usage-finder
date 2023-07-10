@@ -1,3 +1,7 @@
+// Figma needs all code in a single file and does not support imports
+// For now it's ok to keep all in a file but we might need to add
+// a build step later
+
 type PageFinds = { page: PageNode; instances: InstanceNode[] };
 
 type PageStyleFinds = {
