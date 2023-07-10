@@ -7,5 +7,6 @@ out/
 dist/
 code.js
 find.js
+/Plugin
 .vscode
 .DS_Store
