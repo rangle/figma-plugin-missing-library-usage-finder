@@ -2,6 +2,8 @@
 
 Figma Plugin to find instances or styles by name, e.g. to find missing library usage.
 
+[View Figma Plugin Page](https://www.figma.com/community/plugin/1258167373955403979/Missing-Library-Usage-Finder)
+
 <img
  src="https://raw.githubusercontent.com/rangle/figma-plugin-missing-library-usage-finder/readme-assets/images/Plugin%20on%20Red.png"
  alt="Screenshot of the Plugin showing the result of for searching multiple components and styles"
