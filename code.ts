@@ -8,11 +8,29 @@ type PageStyleFinds = {
   page: PageNode;
   instances: Array<[BaseStyle, string, BaseNode]>;
 };
+
 type StyleProps = (typeof stylesProps)[number];
-type Result = [
-  { pageId: string; pageName: string },
-  Array<{ id: string; name: string; styleName?: string }>
-];
+
+type InstanceMeta = {
+  id: string;
+  name: string;
+  /** Only for Styles */
+  styleName?: string;
+  /** Only for Styles */
+  styleId?: string;
+  /** Only for Styles */
+  styleProp?: string;
+};
+
+type Result = [{ pageId: string; pageName: string }, InstanceMeta[]];
+
+type InstancesAndStyles = {
+  instances: InstanceNode[];
+  styles: {
+    node: FrameNode | ComponentNode;
+    styleProp: StyleProps;
+  }[];
+};
 
 /** All props with styles for non-text nodes */
 const stylesProps = [
@@ -36,11 +54,11 @@ const getPage = (node: BaseNode): PageNode | undefined => {
 };
 
 /** Resolves Variants and children to the top ComponentNode in a Component  */
-const getParent = (node: BaseNode, stackSize = 1): BaseNode => {
+const getParent = (node: BaseNode): BaseNode => {
   if (node.parent === null) {
     return node;
   }
-  return getParent(node.parent, stackSize + 1);
+  return getParent(node.parent);
 };
 
 /** Helper to get all components that are instances of names in `componentNames` */
@@ -74,6 +92,62 @@ const findMissingLibraryComponentUsages = (componentNames: string[]) =>
         },
       };
     }, {});
+
+/** Helper to signal UI that instance was detached */
+const confirmDetach = (instanceId: string, styleProp?: string) => {
+  figma.ui.postMessage({
+    type: "confirm-detach",
+    instanceId,
+    ...(styleProp ? { styleProp } : {}),
+  });
+};
+
+/** Detach component instance and report to UI */
+const detachInstance = (node: InstanceNode) => {
+  const instanceId = node.id;
+  console.log("detach instance-node", instanceId);
+  node.detachInstance();
+  confirmDetach(instanceId);
+};
+
+/** Detach style and report to UI */
+const detachStyle = (
+  node: FrameNode | ComponentNode,
+  styleProp: StyleProps
+) => {
+  const instanceId = node.id;
+  console.log(
+    `detach ${node.type.toLowerCase()}-node style`,
+    instanceId,
+    styleProp
+  );
+  (node as FrameNode | ComponentNode)[styleProp as StyleProps] = "";
+  confirmDetach(instanceId, styleProp);
+};
+
+/** Extract flattened `instances` and `styles` from `nodes` */
+const getInstancesAndStyles = (nodes: Result[]) => {
+  return nodes.reduce<InstancesAndStyles>(
+    (acc, [_, simpleInstances]) => {
+      simpleInstances.forEach(({ id, styleId, styleProp }) => {
+        const node = figma.getNodeById(id);
+        if (!node) {
+          return;
+        }
+        if (styleId === undefined) {
+          acc.instances.push(node as InstanceNode);
+        } else if (styleProp !== undefined) {
+          acc.styles.push({
+            node: node as FrameNode | ComponentNode,
+            styleProp: styleProp as StyleProps,
+          });
+        }
+      });
+      return acc;
+    },
+    { instances: [], styles: [] }
+  );
+};
 
 /** Helper to find usage of Styles */
 const findMissingLibraryStyleUsages = (styleNames: string[]) => {
@@ -169,13 +243,15 @@ const handleFindMissingLibraryUsage = (search: string[]) => {
   );
 
   Object.entries(styleUsages).forEach(([pageName, { page, instances }]) => {
-    const simpleInstances = instances.map(([style, styleProp, i]) => ({
-      id: i.id,
-      name: i.name,
-      styleProp,
-      styleId: style.id,
-      styleName: style.name,
-    }));
+    const simpleInstances = instances.map<InstanceMeta>(
+      ([style, styleProp, i]) => ({
+        id: i.id,
+        name: i.name,
+        styleProp,
+        styleId: style.id,
+        styleName: style.name,
+      })
+    );
 
     const currentPageIndex = result.findIndex((p) => p[0].pageId === page.id);
 
@@ -223,20 +299,20 @@ const handleDetachInstance = (
   console.log(">> detach-instance", instanceId, styleId, styleProp, node);
   if (!styleId) {
     // Detach component instance
-    (node as InstanceNode).detachInstance();
-    figma.ui.postMessage({
-      type: "confirm-detach",
-      instanceId,
-    });
+    detachInstance(node as InstanceNode);
     return;
   }
   // Detach Style
-  (node as FrameNode | ComponentNode)[styleProp as StyleProps] = "";
-  figma.ui.postMessage({
-    type: "confirm-detach",
-    instanceId,
-    styleProp,
-  });
+  detachStyle(node as FrameNode | ComponentNode, styleProp as StyleProps);
+};
+
+const handleDetachAll = (nodes: Result[]) => {
+  const { instances, styles } = getInstancesAndStyles(nodes);
+
+  // styles need to be detached first as detached instance may change
+  // references and some styles may be contained in them
+  styles.forEach(({ node, styleProp }) => detachStyle(node, styleProp));
+  instances.forEach(detachInstance);
 };
 
 figma.ui.onmessage = (msg, props) => {
@@ -251,6 +327,10 @@ figma.ui.onmessage = (msg, props) => {
     }
     case "detach-instance": {
       handleDetachInstance(msg.instanceId, msg.styleId, msg.styleProp);
+      return;
+    }
+    case "detach-all": {
+      handleDetachAll(msg.nodes);
       return;
     }
     default: {

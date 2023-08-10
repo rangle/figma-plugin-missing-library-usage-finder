@@ -101,6 +101,21 @@
     margin: 0;
   }
 
+  .global-operations {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.5em 1em;
+    gap: 1em;
+  }
+  .global-operations button {
+    /* font-size: 14px; */
+    line-height: 1em;
+  }
+  .global-operations button svg {
+    vertical-align: bottom;
+    margin-right: 0.5em;
+  }
+
   #search {
     padding: 0 2em;
   }
@@ -131,7 +146,7 @@
 <div id="loading"><i>searching&hellip;</i></div>
 <div id="results"></div>
 <script>
-  const detatchIcon = `<svg class="svg" width="14" height="14" viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg"><path d="M4 0v3h1V0H4zm9.103.896c-1.162-1.161-3.045-1.161-4.207 0l-2.75 2.75.707.708 2.75-2.75c.771-.772 2.022-.772 2.793 0 .771.77.771 2.021 0 2.792l-2.75 2.75.707.708 2.75-2.75c1.162-1.162 1.162-3.046 0-4.208zM.896 13.103c-1.162-1.161-1.162-3.045 0-4.207l2.75-2.75.707.708-2.75 2.75c-.771.77-.771 2.021 0 2.792.771.772 2.022.772 2.793 0l2.75-2.75.707.707-2.75 2.75c-1.162 1.162-3.045 1.162-4.207 0zM14 10h-3V9h3v1zM10 11v3H9v-3h1zM3 4H0v1h3V4z" fill-rule="nonzero" fill-opacity=".9" fill="#000" stroke="none"></path></svg>`;
+  const detachIcon = `<svg class="svg" width="14" height="14" viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg"><path d="M4 0v3h1V0H4zm9.103.896c-1.162-1.161-3.045-1.161-4.207 0l-2.75 2.75.707.708 2.75-2.75c.771-.772 2.022-.772 2.793 0 .771.77.771 2.021 0 2.792l-2.75 2.75.707.708 2.75-2.75c1.162-1.162 1.162-3.046 0-4.208zM.896 13.103c-1.162-1.161-1.162-3.045 0-4.207l2.75-2.75.707.708-2.75 2.75c-.771.77-.771 2.021 0 2.792.771.772 2.022.772 2.793 0l2.75-2.75.707.707-2.75 2.75c-1.162 1.162-3.045 1.162-4.207 0zM14 10h-3V9h3v1zM10 11v3H9v-3h1zM3 4H0v1h3V4z" fill-rule="nonzero" fill-opacity=".9" fill="#000" stroke="none"></path></svg>`;
   document.getElementById("search").onclick = () => {
     const search = document
       .getElementById("components-or-styles")
@@ -193,8 +208,8 @@
               <button class="focus-instance-button" title="Focus Instance">⌖</button>
               ${
                 i.styleName
-                  ? `<button class="detach-style-button" title="Detach Style">${detatchIcon}</button>`
-                  : `<button class="detach-instance-button" title="Detach Instance">${detatchIcon}</button>`
+                  ? `<button class="detach-style-button" title="Detach Style">${detachIcon}</button>`
+                  : `<button class="detach-instance-button" title="Detach Instance">${detachIcon}</button>`
               }</span>
             </li>`
           )
@@ -241,8 +256,32 @@
       noResults.innerText =
         "No results found!\n\nPlease check the spelling or if there are pre-fixes hidden from the Figma UI";
       wrapper.appendChild(noResults);
+      outlet.appendChild(wrapper);
+      // stop if there are no results
+      return;
     }
+
     outlet.appendChild(wrapper);
+
+    // add global operations
+    const globalOperationsWrapper = document.createElement("div");
+    globalOperationsWrapper.className = "global-operations";
+
+    const detachAll = document.createElement("button");
+    detachAll.innerHTML = `${detachIcon}Detach All`;
+    detachAll.addEventListener("click", () => {
+      parent.postMessage(
+        {
+          pluginMessage: {
+            type: "detach-all",
+            nodes,
+          },
+        },
+        "*"
+      );
+    });
+    globalOperationsWrapper.appendChild(detachAll);
+    outlet.appendChild(globalOperationsWrapper);
   };
 
   onmessage = ({ data: { pluginMessage } }) => {
